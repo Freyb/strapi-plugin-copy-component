@@ -17,9 +17,9 @@ module.exports = ({ strapi }) => {
       where: { id: entityID },
       populate: true,
     });
-    if (!entity) return { components: [] };
+    if (!entity || !entity[target]) return { components: [] };
     console.log(entity);
-    return { components: ['hy'] };
+    return { components: entity[target] };
   };
 
   return {

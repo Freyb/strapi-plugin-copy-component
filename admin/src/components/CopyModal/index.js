@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
+import get from 'lodash/get';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -22,6 +23,7 @@ import styled from 'styled-components';
 import { Duplicate, Earth } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
+import useContentTypeLayout from '../../hooks/useContentTypeLayout';
 
 const WrappedButton = styled(Box)`
   svg {
@@ -56,6 +58,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const {
     contentType: { attributes },
   } = allLayoutData;
+  const { getComponentLayout } = useContentTypeLayout();
 
   const [stepNumber, setStepNumber] = useState(Steps.Target);
 
@@ -75,6 +78,40 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     () => availableSlugs.find((x) => x.id === selectedSlug)?.Slug || '',
     [availableSlugs, selectedSlug],
   );
+
+  const [availableComponents, setAvailableComponents] = useState([]);
+  const [tmpSelectedComponent, setTmpSelectedComponent] = useState('');
+  const [selectedComponent, setSelectedComponent] = useState('');
+
+  const getDisplayName = (component) => {
+    const componentLayoutData = getComponentLayout(component.__component);
+
+    const displayName = componentLayoutData.info.displayName;
+
+    const mainFieldKey =
+      get(componentLayoutData, ['options', 'mainField']) ||
+      get(componentLayoutData, ['settings', 'mainField'], 'id');
+
+    const mainField = Array.isArray(mainFieldKey)
+      ? mainFieldKey
+          .map(
+            (_mainFieldKey) =>
+              get(component, [..._mainFieldKey.split('.')]) ?? '',
+          )
+          .filter((k) => k.length > 0)
+          .join(' - ')
+      : get(component, [...mainFieldKey.split('.')]) ?? '';
+
+    const displayedValue =
+      mainFieldKey === 'id' ? '' : String(mainField).trim();
+
+    const mainValue =
+      displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
+
+    const combinedName = `${displayName}${mainValue}`;
+    console.log(combinedName);
+    return combinedName;
+  };
 
   useEffect(() => {
     if (uid) {
@@ -98,7 +135,13 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       dataProxy
         .getComponents(uid, selectedSlug, selectedTarget)
         .then((result) => {
-          console.log('Slug components', result);
+          setAvailableComponents(
+            result.components.map((c, idx) => ({
+              ...c,
+              displayName: getDisplayName(c),
+              index: `${idx}`,
+            })),
+          );
         })
         .catch((_e) => {
           console.log(_e);
@@ -114,6 +157,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     setSelectedTarget('');
     setTmpSelectedSlug('');
     setSelectedSlug('');
+    setTmpSelectedComponent('');
     setStepNumber(Steps.Target);
     onClose();
   };
@@ -128,7 +172,13 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
         setSelectedSlug(tmpSelectedSlug);
         setStepNumber(Steps.Component);
       }
-    } else console.log('Finished');
+    } else if (stepNumber === Steps.Component) {
+      if (tmpSelectedComponent !== '') {
+        console.log(
+          availableComponents.find((x) => x.index === tmpSelectedComponent),
+        );
+      }
+    }
   };
 
   const getModalTitle = useMemo(() => {
@@ -175,7 +225,24 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           </Select>
         </Box>
       );
-    return <Box>Hello</Box>;
+    if (stepNumber === Steps.Component)
+      return (
+        <Box minWidth="100%">
+          <Select
+            label="Component"
+            placeholder="Select component..."
+            value={tmpSelectedComponent}
+            onChange={setTmpSelectedComponent}
+          >
+            {availableComponents.map((c) => (
+              <Option key={c.index} value={c.index}>
+                {c.displayName}
+              </Option>
+            ))}
+          </Select>
+        </Box>
+      );
+    return <></>;
   };
 
   return (
