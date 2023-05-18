@@ -1,8 +1,16 @@
 module.exports = [
   {
     method: 'GET',
-    path: '/',
-    handler: 'myController.index',
+    path: '/getSlugs',
+    handler: 'dataController.getSlugs',
+    config: {
+      policies: [],
+    },
+  },
+  {
+    method: 'GET',
+    path: '/getComponents',
+    handler: 'dataController.getComponents',
     config: {
       policies: [],
     },

@@ -18,7 +18,7 @@ const PreviewButton = ({ onClick }) => {
     >
       {formatMessage({
         id: getTrad('sidepanel.button.text'),
-        defaultMessage: 'Copy to other locales',
+        defaultMessage: 'Copy from other entry',
       })}
     </Button>
   );
