@@ -20,7 +20,7 @@ import {
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
-import { Duplicate, Earth } from '@strapi/icons';
+import { ChevronRight, Check, Earth } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
 import useContentTypeLayout from '../../hooks/useContentTypeLayout';
@@ -162,22 +162,26 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     onClose();
   };
 
+  const canProceed = () => {
+    return (
+      (stepNumber === Steps.Target && selectedTarget !== '') ||
+      (stepNumber === Steps.Slug && tmpSelectedSlug !== '') ||
+      (stepNumber === Steps.Component && tmpSelectedComponent !== '')
+    );
+  };
+
   const handleNext = () => {
+    if (!canProceed()) return;
+
     if (stepNumber === Steps.Target) {
-      if (selectedTarget !== '') {
-        setStepNumber(Steps.Slug);
-      }
+      setStepNumber(Steps.Slug);
     } else if (stepNumber === Steps.Slug) {
-      if (tmpSelectedSlug !== '') {
-        setSelectedSlug(tmpSelectedSlug);
-        setStepNumber(Steps.Component);
-      }
+      setSelectedSlug(tmpSelectedSlug);
+      setStepNumber(Steps.Component);
     } else if (stepNumber === Steps.Component) {
-      if (tmpSelectedComponent !== '') {
-        console.log(
-          availableComponents.find((x) => x.index === tmpSelectedComponent),
-        );
-      }
+      console.log(
+        availableComponents.find((x) => x.index === tmpSelectedComponent),
+      );
     }
   };
 
@@ -272,8 +276,10 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           <Button
             onClick={handleNext}
             variant="success-light"
-            startIcon={<Duplicate />}
-            disabled={isLoading}
+            endIcon={
+              stepNumber === Steps.Component ? <Check /> : <ChevronRight />
+            }
+            disabled={isLoading || !canProceed()}
           >
             {stepNumber === Steps.Component
               ? formatMessage({
