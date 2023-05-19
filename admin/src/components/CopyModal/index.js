@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import get from 'lodash/get';
+import { get, set } from 'lodash';
+import { useDispatch } from 'react-redux';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -10,7 +11,7 @@ import {
   //   DialogBody,
   DialogFooter,
   Flex,
-  Typography,
+  // Typography,
   Button,
   Box,
   Icon,
@@ -23,7 +24,7 @@ import styled from 'styled-components';
 import { ChevronRight, Check, Earth } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
-import useContentTypeLayout from '../../hooks/useContentTypeLayout';
+import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
 
 const WrappedButton = styled(Box)`
   svg {
@@ -54,11 +55,16 @@ const Steps = {
 const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const { formatMessage } = useIntl();
   const toggleNotification = useNotification();
-  const { allLayoutData } = useCMEditViewDataManager();
+  const dispatch = useDispatch();
+  const xx = useCMEditViewDataManager();
+  const { allLayoutData, modifiedData } = xx;
   const {
     contentType: { attributes },
+    components,
   } = allLayoutData;
-  const { getComponentLayout } = useContentTypeLayout();
+  const getComponentLayout = (componentUid) => {
+    return components?.[componentUid] ?? {};
+  };
 
   const [stepNumber, setStepNumber] = useState(Steps.Target);
 
@@ -81,7 +87,6 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
 
   const [availableComponents, setAvailableComponents] = useState([]);
   const [tmpSelectedComponent, setTmpSelectedComponent] = useState('');
-  const [selectedComponent, setSelectedComponent] = useState('');
 
   const getDisplayName = (component) => {
     const componentLayoutData = getComponentLayout(component.__component);
@@ -109,7 +114,6 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
 
     const combinedName = `${displayName}${mainValue}`;
-    console.log(combinedName);
     return combinedName;
   };
 
@@ -118,7 +122,6 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       dataProxy
         .getSlugs(uid)
         .then((result) => {
-          console.log('Available slugs', result);
           setAvailableSlugs(result.slugs);
         })
         .catch((_e) => {
@@ -144,7 +147,6 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           );
         })
         .catch((_e) => {
-          console.log(_e);
           toggleNotification({
             type: 'warning',
             message: { id: 'notification.error' },
@@ -179,9 +181,32 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       setSelectedSlug(tmpSelectedSlug);
       setStepNumber(Steps.Component);
     } else if (stepNumber === Steps.Component) {
-      console.log(
-        availableComponents.find((x) => x.index === tmpSelectedComponent),
+      const selectedComponent = availableComponents.find(
+        (x) => x.index === tmpSelectedComponent,
       );
+
+      const fieldsToRemove = ['id', 'index', 'displayName'];
+      const cleanedComponent = {
+        ...Object.fromEntries(
+          Object.entries(selectedComponent).filter(
+            ([key, _value]) => !fieldsToRemove.includes(key),
+          ),
+        ),
+        __temp_key__: getMaxTempKey(modifiedData[selectedTarget]) + 1,
+      };
+
+      const cleanedData = { ...modifiedData };
+      set(
+        cleanedData,
+        [selectedTarget],
+        [...modifiedData[selectedTarget], cleanedComponent],
+      );
+
+      dispatch({
+        type: 'ContentManager/CrudReducer/GET_DATA_SUCCEEDED',
+        data: cleanedData,
+        setModifiedDataOnly: true,
+      });
     }
   };
 
