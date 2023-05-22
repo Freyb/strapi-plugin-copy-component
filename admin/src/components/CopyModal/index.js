@@ -13,17 +13,16 @@ import {
   // Typography,
   Button,
   Box,
-  Icon,
   Loader,
   Select,
   Option,
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
-import { ChevronRight, Check, Earth } from '@strapi/icons';
+import { ChevronRight, Check } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
-import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
+// import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
 import { cleanData } from '@strapi/plugin-i18n/admin/src/components/CMEditViewInjectedComponents/CMEditViewCopyLocale/utils';
 
 const WrappedButton = styled(Box)`
@@ -35,7 +34,7 @@ const WrappedButton = styled(Box)`
 const ModifiedDialogBody = ({ children, icon, isLoading }) => {
   return (
     <Box paddingTop="8" paddingBottom="8" paddingLeft="6" paddingRight="6">
-      {!isLoading && (
+      {!isLoading && icon && (
         <WrappedButton paddingBottom="2">
           <Flex justifyContent="center">{icon}</Flex>
         </WrappedButton>
@@ -312,10 +311,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
 
   return (
     <Dialog onClose={onClose} title={getModalTitle} isOpen={isOpen}>
-      <ModifiedDialogBody
-        icon={<Icon width={`3rem`} height={`3rem`} as={Earth} />}
-        isLoading={isLoading}
-      >
+      <ModifiedDialogBody isLoading={isLoading}>
         <Flex direction="column" alignItems="center" gap={2}>
           {getModalBody()}
         </Flex>
