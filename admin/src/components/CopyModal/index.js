@@ -117,6 +117,23 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const [availableComponents, setAvailableComponents] = useState([]);
   const [tmpSelectedComponent, setTmpSelectedComponent] = useState('');
 
+  const initializeModal = () => {
+    if (targetSections.length == 1) {
+      setSelectedTarget(targetSections[0]);
+      setStepNumber(Steps.Slug);
+    } else {
+      setSelectedTarget('');
+      setStepNumber(Steps.Target);
+    }
+    setTmpSelectedSlug('');
+    setSelectedSlug('');
+    setTmpSelectedComponent('');
+  };
+
+  useEffect(() => {
+    initializeModal();
+  }, []);
+
   useEffect(() => {
     if (uid) {
       dataProxy
@@ -174,11 +191,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   }, [selectedSlug]);
 
   const handleCancel = () => {
-    setSelectedTarget('');
-    setTmpSelectedSlug('');
-    setSelectedSlug('');
-    setTmpSelectedComponent('');
-    setStepNumber(Steps.Target);
+    initializeModal();
     onClose();
   };
 
