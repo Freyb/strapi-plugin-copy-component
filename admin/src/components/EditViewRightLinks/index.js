@@ -8,12 +8,18 @@ import {
 import PreviewButton from '../PreviewButton';
 import CopyModal from '../CopyModal';
 import getTrad from '../../utils/getTrad';
+import useConfig from '../../hooks/useConfig';
 
 const EditViewRightLinks = () => {
   const toggleNotification = useNotification();
   const dispatch = useDispatch();
   const cmdatamanager = useCMEditViewDataManager();
   const uid = cmdatamanager.allLayoutData.contentType.uid;
+  const { config, isLoading: configIsLoading } = useConfig();
+
+  const allowedEntity =
+    !configIsLoading &&
+    (config.contentTypes === '*' || config.contentTypes.includes(uid));
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +50,7 @@ const EditViewRightLinks = () => {
   const handleCancel = () => {
     if (!isLoading) toggleModal();
   };
+  if (!allowedEntity) return null;
 
   return (
     <>

@@ -1,27 +1,25 @@
 import { useEffect, useState } from 'react';
 import { request, useNotification } from '@strapi/helper-plugin';
+import pluginId from '../../pluginId';
+import defaultState from './defaultState';
 
-const fetchLocalesList = async () => {
-  try {
-    const data = await request('/i18n/locales', {
-      method: 'GET',
-    });
+const fetchConfig = async () => {
+  const data = await request(`/${pluginId}/config`, {
+    method: 'GET',
+  });
 
-    return data;
-  } catch (e) {
-    throw e;
-  }
+  return data ?? {};
 };
 
-const useLocales = () => {
+const useConfig = () => {
   const toggleNotification = useNotification();
   const [isLoading, setIsLoading] = useState(true);
-  const [locales, setLocales] = useState([]);
+  const [config, setConfig] = useState(defaultState);
 
   useEffect(() => {
-    fetchLocalesList()
-      .then((locales) => {
-        setLocales(locales);
+    fetchConfig()
+      .then((config) => {
+        setConfig(config);
       })
       .catch(() => {
         toggleNotification({
@@ -34,7 +32,7 @@ const useLocales = () => {
       });
   }, [toggleNotification]);
 
-  return { locales, isLoading };
+  return { config, isLoading };
 };
 
-export default useLocales;
+export default useConfig;

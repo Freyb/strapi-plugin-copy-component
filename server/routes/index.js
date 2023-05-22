@@ -15,4 +15,12 @@ module.exports = [
       policies: [],
     },
   },
+  {
+    method: 'GET',
+    path: '/config',
+    handler: 'configController.getConfig',
+    config: {
+      policies: ['admin::isAuthenticatedAdmin'],
+    },
+  },
 ];
