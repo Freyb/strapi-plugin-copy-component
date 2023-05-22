@@ -11,11 +11,7 @@ module.exports = ({ strapi }) => {
   };
   const getComponents = async (ctx) => {
     const { query } = ctx.request;
-    ctx.body = await dataService.getComponents(
-      query.uid,
-      query.entityid,
-      query.target,
-    );
+    ctx.body = await dataService.getComponents(query.uid, query.entityid);
   };
 
   return {

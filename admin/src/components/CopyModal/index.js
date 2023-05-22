@@ -56,27 +56,22 @@ const getComponentLayout = (allComponents, componentUid) => {
   return allComponents?.[componentUid] ?? {};
 };
 
-const getDisplayName = (allComponents, component) => {
-  const componentLayoutData = getComponentLayout(
-    allComponents,
-    component.__component,
-  );
-
-  const displayName = componentLayoutData.info.displayName;
+const getDisplayName = (layoutData, contentData) => {
+  const displayName = layoutData.info.displayName;
 
   const mainFieldKey =
-    get(componentLayoutData, ['options', 'mainField']) ||
-    get(componentLayoutData, ['settings', 'mainField'], 'id');
+    get(layoutData, ['options', 'mainField']) ||
+    get(layoutData, ['settings', 'mainField'], 'id');
 
   const mainField = Array.isArray(mainFieldKey)
     ? mainFieldKey
         .map(
           (_mainFieldKey) =>
-            get(component, [..._mainFieldKey.split('.')]) ?? '',
+            get(contentData, [..._mainFieldKey.split('.')]) ?? '',
         )
         .filter((k) => k.length > 0)
         .join(' - ')
-    : get(component, [...mainFieldKey.split('.')]) ?? '';
+    : get(contentData, [...mainFieldKey.split('.')]) ?? '';
 
   const displayedValue = mainFieldKey === 'id' ? '' : String(mainField).trim();
 
@@ -91,10 +86,8 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const { formatMessage } = useIntl();
   const toggleNotification = useNotification();
   const { allLayoutData, modifiedData } = useCMEditViewDataManager();
-  const {
-    contentType: { attributes },
-    components,
-  } = allLayoutData;
+  const { contentType, components } = allLayoutData;
+  const { attributes } = contentType;
 
   // Step number
   const [stepNumber, setStepNumber] = useState(Steps.Target);
@@ -126,9 +119,14 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     if (uid) {
       dataProxy
         .getSlugs(uid)
-        .then((result) => {
+        .then(({ entities }) => {
           setAvailableSlugs(
-            result.slugs.filter((s) => s.id !== modifiedData.id),
+            entities
+              .filter((e) => e.id !== modifiedData.id)
+              .map((e) => ({
+                ...e,
+                displayName: getDisplayName(contentType, e),
+              })),
           );
         })
         .catch((_e) => {
@@ -143,7 +141,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   useEffect(() => {
     if (selectedSlug) {
       dataProxy
-        .getComponents(uid, selectedSlug, selectedTarget)
+        .getComponents(uid, selectedSlug)
         .then(({ entity }) => {
           if (entity) {
             const cleanedData = cleanData(
@@ -155,7 +153,10 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
             setAvailableComponents(
               cleanedData[selectedTarget].map((c, idx) => ({
                 ...c,
-                displayName: getDisplayName(components, c),
+                displayName: getDisplayName(
+                  getComponentLayout(components, c.__component),
+                  c,
+                ),
                 index: `${idx}`,
               })),
             );
@@ -267,7 +268,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           >
             {availableSlugs.map((s) => (
               <Option key={s.id} value={s.id}>
-                {s.Slug}
+                {s.displayName}
               </Option>
             ))}
           </Select>

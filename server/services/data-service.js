@@ -8,12 +8,11 @@ module.exports = ({ strapi }) => {
   const getSlugs = async (uid) => {
     const entityAPI = getEntityAPI(uid);
     const entities = await entityAPI.findMany();
-    const result = entities.map(({ id, Slug }) => ({ id, Slug }));
-    console.log('getSlugsresult', result);
-    return { slugs: result };
+    console.log(entities);
+    return { entities };
   };
 
-  const getComponents = async (uid, entityID, target) => {
+  const getComponents = async (uid, entityID) => {
     const entityAPI = getEntityService();
     const entity = await entityAPI.findOneWithCreatorRolesAndCount(
       entityID,

@@ -8,9 +8,9 @@ const dataProxy = {
     });
     return result;
   },
-  getComponents: async (uid, entityID, target) => {
+  getComponents: async (uid, entityID) => {
     const result = await request(
-      `/${pluginId}/getComponents?uid=${uid}&entityid=${entityID}&target=${target}`,
+      `/${pluginId}/getComponents?uid=${uid}&entityid=${entityID}`,
       {
         method: 'GET',
       },
