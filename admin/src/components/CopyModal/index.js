@@ -56,7 +56,7 @@ const getComponentLayout = (allComponents, componentUid) => {
   return allComponents?.[componentUid] ?? {};
 };
 
-const getDisplayName = (layoutData, contentData) => {
+const getDisplayName = (layoutData, contentData, withDisplayName = true) => {
   const displayName = layoutData.info.displayName;
 
   const mainFieldKey =
@@ -78,7 +78,9 @@ const getDisplayName = (layoutData, contentData) => {
   const mainValue =
     displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
 
-  const combinedName = `${displayName}${mainValue}`;
+  const combinedName = withDisplayName
+    ? `${displayName}${mainValue}`
+    : displayedValue;
   return combinedName;
 };
 
@@ -125,7 +127,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
               .filter((e) => e.id !== modifiedData.id)
               .map((e) => ({
                 ...e,
-                displayName: getDisplayName(contentType, e),
+                displayName: getDisplayName(contentType, e, false),
               })),
           );
         })
