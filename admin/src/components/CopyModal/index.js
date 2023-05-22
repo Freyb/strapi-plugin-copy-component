@@ -127,7 +127,9 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       dataProxy
         .getSlugs(uid)
         .then((result) => {
-          setAvailableSlugs(result.slugs);
+          setAvailableSlugs(
+            result.slugs.filter((s) => s.id !== modifiedData.id),
+          );
         })
         .catch((_e) => {
           toggleNotification({
