@@ -1,30 +1,19 @@
 import React, { useState } from 'react';
+import { useDispatch } from 'react-redux';
 import {
   useNotification,
   useCMEditViewDataManager,
-  useRBACProvider,
 } from '@strapi/helper-plugin';
-import { request } from '@strapi/helper-plugin';
-import isEqual from 'lodash/isEqual';
 
 import PreviewButton from '../PreviewButton';
 import CopyModal from '../CopyModal';
-import { pluginId } from '../../pluginId';
 import getTrad from '../../utils/getTrad';
-import useLocales from '../../hooks/useLocales';
-import useGetLocalizations from '../../hooks/useLocalizations';
-import useContentTypePermissions from '../../hooks/useContentTypePermissions';
-import { cleanData } from '@strapi/plugin-i18n/admin/src/components/CMEditViewInjectedComponents/CMEditViewCopyLocale/utils';
 
 const EditViewRightLinks = () => {
   const toggleNotification = useNotification();
+  const dispatch = useDispatch();
   const cmdatamanager = useCMEditViewDataManager();
-  const { refetchPermissions } = useRBACProvider();
-
-  const { allLayoutData, isCreatingEntry, initialData, modifiedData } =
-    cmdatamanager;
-  const { contentType } = allLayoutData;
-  const { uid } = contentType;
+  const uid = cmdatamanager.allLayoutData.contentType.uid;
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,8 +23,20 @@ const EditViewRightLinks = () => {
     toggleModal();
   };
 
-  const handleSubmit = (values) => {
+  const handleSubmit = (cleanedData) => {
     setIsLoading(true);
+    dispatch({
+      type: 'ContentManager/CrudReducer/GET_DATA_SUCCEEDED',
+      data: cleanedData,
+      setModifiedDataOnly: true,
+    });
+    toggleNotification({
+      type: 'success',
+      message: {
+        id: getTrad('notification.generate.success'),
+        defaultMessage: 'Success',
+      },
+    });
     setIsLoading(false);
     toggleModal();
   };

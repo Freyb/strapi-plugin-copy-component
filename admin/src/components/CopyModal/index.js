@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
 import { get, set } from 'lodash';
-import { useDispatch } from 'react-redux';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -25,6 +24,7 @@ import { ChevronRight, Check, Earth } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
 import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
+import { cleanData } from '@strapi/plugin-i18n/admin/src/components/CMEditViewInjectedComponents/CMEditViewCopyLocale/utils';
 
 const WrappedButton = styled(Box)`
   svg {
@@ -52,22 +52,54 @@ const Steps = {
   Component: 'Component',
 };
 
+const getComponentLayout = (allComponents, componentUid) => {
+  return allComponents?.[componentUid] ?? {};
+};
+
+const getDisplayName = (allComponents, component) => {
+  const componentLayoutData = getComponentLayout(
+    allComponents,
+    component.__component,
+  );
+
+  const displayName = componentLayoutData.info.displayName;
+
+  const mainFieldKey =
+    get(componentLayoutData, ['options', 'mainField']) ||
+    get(componentLayoutData, ['settings', 'mainField'], 'id');
+
+  const mainField = Array.isArray(mainFieldKey)
+    ? mainFieldKey
+        .map(
+          (_mainFieldKey) =>
+            get(component, [..._mainFieldKey.split('.')]) ?? '',
+        )
+        .filter((k) => k.length > 0)
+        .join(' - ')
+    : get(component, [...mainFieldKey.split('.')]) ?? '';
+
+  const displayedValue = mainFieldKey === 'id' ? '' : String(mainField).trim();
+
+  const mainValue =
+    displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
+
+  const combinedName = `${displayName}${mainValue}`;
+  return combinedName;
+};
+
 const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const { formatMessage } = useIntl();
   const toggleNotification = useNotification();
-  const dispatch = useDispatch();
-  const xx = useCMEditViewDataManager();
-  const { allLayoutData, modifiedData } = xx;
+  const { allLayoutData, modifiedData } = useCMEditViewDataManager();
   const {
     contentType: { attributes },
     components,
   } = allLayoutData;
-  const getComponentLayout = (componentUid) => {
-    return components?.[componentUid] ?? {};
-  };
 
+  // Step number
   const [stepNumber, setStepNumber] = useState(Steps.Target);
 
+  // Select target container
   const targetSections = useMemo(
     () =>
       Object.entries(attributes)
@@ -77,6 +109,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   );
   const [selectedTarget, setSelectedTarget] = useState('');
 
+  // Select source slug
   const [availableSlugs, setAvailableSlugs] = useState([]);
   const [tmpSelectedSlug, setTmpSelectedSlug] = useState('');
   const [selectedSlug, setSelectedSlug] = useState('');
@@ -85,37 +118,9 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     [availableSlugs, selectedSlug],
   );
 
+  // Select source component
   const [availableComponents, setAvailableComponents] = useState([]);
   const [tmpSelectedComponent, setTmpSelectedComponent] = useState('');
-
-  const getDisplayName = (component) => {
-    const componentLayoutData = getComponentLayout(component.__component);
-
-    const displayName = componentLayoutData.info.displayName;
-
-    const mainFieldKey =
-      get(componentLayoutData, ['options', 'mainField']) ||
-      get(componentLayoutData, ['settings', 'mainField'], 'id');
-
-    const mainField = Array.isArray(mainFieldKey)
-      ? mainFieldKey
-          .map(
-            (_mainFieldKey) =>
-              get(component, [..._mainFieldKey.split('.')]) ?? '',
-          )
-          .filter((k) => k.length > 0)
-          .join(' - ')
-      : get(component, [...mainFieldKey.split('.')]) ?? '';
-
-    const displayedValue =
-      mainFieldKey === 'id' ? '' : String(mainField).trim();
-
-    const mainValue =
-      displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
-
-    const combinedName = `${displayName}${mainValue}`;
-    return combinedName;
-  };
 
   useEffect(() => {
     if (uid) {
@@ -137,14 +142,22 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     if (selectedSlug) {
       dataProxy
         .getComponents(uid, selectedSlug, selectedTarget)
-        .then((result) => {
-          setAvailableComponents(
-            result.components.map((c, idx) => ({
-              ...c,
-              displayName: getDisplayName(c),
-              index: `${idx}`,
-            })),
-          );
+        .then(({ entity }) => {
+          if (entity) {
+            const cleanedData = cleanData(
+              entity,
+              allLayoutData,
+              entity.localizations,
+            );
+
+            setAvailableComponents(
+              cleanedData[selectedTarget].map((c, idx) => ({
+                ...c,
+                displayName: getDisplayName(components, c),
+                index: `${idx}`,
+              })),
+            );
+          }
         })
         .catch((_e) => {
           toggleNotification({
@@ -185,15 +198,12 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
         (x) => x.index === tmpSelectedComponent,
       );
 
-      const fieldsToRemove = ['id', 'index', 'displayName'];
-      const cleanedComponent = {
-        ...Object.fromEntries(
-          Object.entries(selectedComponent).filter(
-            ([key, _value]) => !fieldsToRemove.includes(key),
-          ),
+      const fieldsToRemove = ['index', 'displayName'];
+      const cleanedComponent = Object.fromEntries(
+        Object.entries(selectedComponent).filter(
+          ([key, _value]) => !fieldsToRemove.includes(key),
         ),
-        __temp_key__: getMaxTempKey(modifiedData[selectedTarget]) + 1,
-      };
+      );
 
       const cleanedData = { ...modifiedData };
       set(
@@ -202,19 +212,24 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
         [...modifiedData[selectedTarget], cleanedComponent],
       );
 
-      dispatch({
-        type: 'ContentManager/CrudReducer/GET_DATA_SUCCEEDED',
-        data: cleanedData,
-        setModifiedDataOnly: true,
-      });
+      onSubmit(cleanedData);
     }
   };
 
   const getModalTitle = useMemo(() => {
-    if (stepNumber == Steps.Target) return 'Select target container';
-    if (stepNumber == Steps.Slug) return 'Select slug';
+    if (stepNumber == Steps.Target)
+      return formatMessage({
+        id: getTrad('modal.title.target'),
+      });
+    if (stepNumber == Steps.Slug)
+      return formatMessage({
+        id: getTrad('modal.title.slug'),
+      });
     if (stepNumber == Steps.Component)
-      return `Select component from ${selectedSlugName}`;
+      return formatMessage(
+        { id: getTrad('modal.title.component') },
+        { selectedSlugName },
+      );
     return '';
   }, [stepNumber]);
 
@@ -224,8 +239,9 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       return (
         <Box minWidth="100%">
           <Select
-            label="Target"
-            placeholder="Select target container..."
+            placeholder={formatMessage({
+              id: getTrad('modal.placeholder.target'),
+            })}
             value={selectedTarget}
             onChange={setSelectedTarget}
           >
@@ -241,8 +257,9 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       return (
         <Box minWidth="100%">
           <Select
-            label="Slug"
-            placeholder="Select source slug..."
+            placeholder={formatMessage({
+              id: getTrad('modal.placeholder.slug'),
+            })}
             value={tmpSelectedSlug}
             onChange={setTmpSelectedSlug}
           >
@@ -258,8 +275,9 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       return (
         <Box minWidth="100%">
           <Select
-            label="Component"
-            placeholder="Select component..."
+            placeholder={formatMessage({
+              id: getTrad('modal.placeholder.component'),
+            })}
             value={tmpSelectedComponent}
             onChange={setTmpSelectedComponent}
           >

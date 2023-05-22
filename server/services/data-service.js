@@ -2,6 +2,8 @@
 
 module.exports = ({ strapi }) => {
   const getEntityAPI = (uid) => strapi.query(uid);
+  const getEntityService = () =>
+    strapi.plugin('content-manager').service('entity-manager');
 
   const getSlugs = async (uid) => {
     const entityAPI = getEntityAPI(uid);
@@ -12,14 +14,14 @@ module.exports = ({ strapi }) => {
   };
 
   const getComponents = async (uid, entityID, target) => {
-    const entityAPI = getEntityAPI(uid);
-    const entity = await entityAPI.findOne({
-      where: { id: entityID },
-      populate: true,
-    });
-    if (!entity || !entity[target]) return { components: [] };
+    const entityAPI = getEntityService();
+    const entity = await entityAPI.findOneWithCreatorRolesAndCount(
+      entityID,
+      uid,
+    );
+    if (!entity) return { entity: null };
     console.log(entity);
-    return { components: entity[target] };
+    return { entity };
   };
 
   return {
