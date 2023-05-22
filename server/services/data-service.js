@@ -8,7 +8,6 @@ module.exports = ({ strapi }) => {
   const getSlugs = async (uid) => {
     const entityAPI = getEntityAPI(uid);
     const entities = await entityAPI.findMany();
-    console.log(entities);
     return { entities };
   };
 
@@ -19,7 +18,6 @@ module.exports = ({ strapi }) => {
       uid,
     );
     if (!entity) return { entity: null };
-    console.log(entity);
     return { entity };
   };
 
