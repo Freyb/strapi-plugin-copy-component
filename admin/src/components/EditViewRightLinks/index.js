@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import React, { useMemo, useState } from 'react';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import {
   useNotification,
   useCMEditViewDataManager,
 } from '@strapi/helper-plugin';
+import { makeSelectModelAndComponentSchemas } from '@strapi/admin/admin/src/content-manager/pages/App/selectors';
 
 import PreviewButton from '../PreviewButton';
 import CopyModal from '../CopyModal';
@@ -17,9 +18,31 @@ const EditViewRightLinks = () => {
   const uid = cmdatamanager.allLayoutData.contentType.uid;
   const { config, isLoading: configIsLoading } = useConfig();
 
-  const allowedEntity =
-    !configIsLoading &&
-    (config.contentTypes === '*' || config.contentTypes.includes(uid));
+  const schemasSelector = useMemo(makeSelectModelAndComponentSchemas, []);
+  const { schemas } = useSelector(
+    (state) => schemasSelector(state),
+    shallowEqual,
+  );
+
+  const currentConfig = useMemo(
+    () =>
+      config.contentTypes.filter((c) =>
+        typeof c === 'string' ? c === uid : c.uid === uid,
+      )[0],
+    [config],
+  );
+  const allowedSourceTypes = useMemo(
+    () =>
+      currentConfig &&
+      (typeof currentConfig === 'string'
+        ? [currentConfig]
+        : currentConfig.source),
+    [currentConfig],
+  );
+  const allowedEntity = useMemo(
+    () => !configIsLoading && !!currentConfig,
+    [configIsLoading, currentConfig],
+  );
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,7 +83,8 @@ const EditViewRightLinks = () => {
         onClose={handleCancel}
         onSubmit={handleSubmit}
         isLoading={isLoading}
-        uid={uid}
+        allowedSourceTypes={allowedSourceTypes}
+        schemas={schemas}
       />
     </>
   );

@@ -3,9 +3,11 @@
   "notification.generate.error": "Something went wrong",
 
   "modal.title.target": "Select target container",
+  "modal.title.sourcetype": "Select source uid",
   "modal.title.slug": "Select slug",
   "modal.title.component": "Select component from {selectedSlugName}",
   "modal.placeholder.target": "Select target container...",
+  "modal.placeholder.sourcetype": "Select source uid...",
   "modal.placeholder.slug": "Select source slug...",
   "modal.placeholder.component": "Select component...",
   "modal.button.cancel": "Cancel",

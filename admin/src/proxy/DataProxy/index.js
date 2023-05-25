@@ -17,6 +17,15 @@ const dataProxy = {
     );
     return result;
   },
+  getLayout: async (uid) => {
+    const { data } = await request(
+      `/content-manager/content-types/${uid}/configuration`,
+      {
+        method: 'GET',
+      },
+    );
+    return data;
+  },
 };
 
 export default dataProxy;

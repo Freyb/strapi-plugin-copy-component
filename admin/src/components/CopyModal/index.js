@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { get, set } from 'lodash';
+import { set } from 'lodash';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -18,90 +18,179 @@ import {
   Option,
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
-import styled from 'styled-components';
 import { ChevronRight, Check } from '@strapi/icons';
 import getTrad from '../../utils/getTrad';
 import dataProxy from '../../proxy/DataProxy';
+import {
+  getDisplayName,
+  ModifiedDialogBody,
+  getComponentLayout,
+  getSourceLayout,
+} from './helpers';
 // import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
 import { cleanData } from '@strapi/plugin-i18n/admin/src/components/CMEditViewInjectedComponents/CMEditViewCopyLocale/utils';
 
-const WrappedButton = styled(Box)`
-  svg {
-    width: ${({ theme: e }) => e.spaces[6]};
-    height: ${({ theme: e }) => e.spaces[6]};
-  }
-`;
-const ModifiedDialogBody = ({ children, icon, isLoading }) => {
-  return (
-    <Box paddingTop="8" paddingBottom="8" paddingLeft="6" paddingRight="6">
-      {!isLoading && icon && (
-        <WrappedButton paddingBottom="2">
-          <Flex justifyContent="center">{icon}</Flex>
-        </WrappedButton>
-      )}
-      <>{children}</>
-    </Box>
-  );
-};
-
 const Steps = {
-  Target: 'Target',
-  Uid: 'Uid',
-  Slug: 'Slug',
+  TargetContainer: 'TargetContainer',
+  SourceType: 'SourceType',
+  SourceSlug: 'SourceSlug',
   Component: 'Component',
 };
 
-const getComponentLayout = (allComponents, componentUid) => {
-  return allComponents?.[componentUid] ?? {};
+const discoverRepeatableChildren = (rootComponent, components) => {
+  const recursiveDisvoverRepeatableChildren = (component) => {
+    const layout = getComponentLayout(components, component);
+    const result = Object.entries(layout.attributes).reduce(
+      (acc, [currKey, currValue]) => {
+        if (currValue.type === 'component') {
+          const subComponentResult = recursiveDisvoverRepeatableChildren(
+            currValue.component,
+          );
+          acc[currKey] = {
+            ...subComponentResult,
+            uid: currValue.component,
+            repeatable: currValue.repeatable,
+          };
+        }
+        return acc;
+      },
+      {},
+    );
+    return result;
+  };
+  return recursiveDisvoverRepeatableChildren(rootComponent);
 };
 
-const getDisplayName = (layoutData, contentData, withDisplayName = true) => {
-  const displayName = layoutData.info.displayName;
+const discoverTargetContainers = ({ contentType, components }, contentData) => {
+  const recursiveDiscoverOfComponents = (componentHierarchy, componentData) => {
+    const { repeatable, uid, ...rest } = componentHierarchy;
+    const attributes = Object.entries(rest);
+    if (repeatable) {
+      const componentDataFiltered = componentData.filter((c) =>
+        c.hasOwnProperty('id'),
+      );
+      if (componentDataFiltered.length == 0 || attributes.length == 0)
+        return { container: true };
 
-  const mainFieldKey =
-    get(layoutData, ['options', 'mainField']) ||
-    get(layoutData, ['settings', 'mainField'], 'id');
+      return {
+        ...componentDataFiltered.map((_componentData) => ({
+          id: _componentData.id,
+          displayName: getDisplayName(
+            getComponentLayout(components, uid),
+            _componentData,
+          ),
+          ...attributes.reduce((attrAcc, [key, value]) => {
+            attrAcc[key] = recursiveDiscoverOfComponents(
+              value,
+              _componentData[key],
+            );
+            return attrAcc;
+          }, {}),
+          container: false,
+        })),
+        container: true,
+      };
+    } else {
+      if (!componentData) return null;
+      return {
+        ...attributes.reduce((acc, [key, value]) => {
+          acc[key] = recursiveDiscoverOfComponents(value, componentData[key]);
+          return acc;
+        }, {}),
+        container: false,
+      };
+    }
+  };
 
-  const mainField = Array.isArray(mainFieldKey)
-    ? mainFieldKey
-        .map(
-          (_mainFieldKey) =>
-            get(contentData, [..._mainFieldKey.split('.')]) ?? '',
-        )
-        .filter((k) => k.length > 0)
-        .join(' - ')
-    : get(contentData, [...mainFieldKey.split('.')]) ?? '';
+  const prepareDynamicZone = (componentData) => {
+    const componentDataFiltered = componentData.filter((c) =>
+      c.hasOwnProperty('id'),
+    );
+    if (componentDataFiltered.length == 0) return {};
 
-  const displayedValue = mainFieldKey === 'id' ? '' : String(mainField).trim();
+    return {
+      ...componentDataFiltered.map((_componentData) => {
+        const componentHierarchy = discoverRepeatableChildren(
+          _componentData.__component,
+          components,
+        );
+        if (Object.keys(componentHierarchy).length === 0) return null;
+        return recursiveDiscoverOfComponents(
+          componentHierarchy,
+          _componentData,
+        );
+      }),
+      container: true,
+    };
+  };
 
-  const mainValue =
-    displayedValue.length > 0 ? ` - ${displayedValue}` : displayedValue;
-
-  const combinedName = withDisplayName
-    ? `${displayName}${mainValue}`
-    : displayedValue;
-  return combinedName;
+  const rootContainers = Object.entries(contentType.attributes).reduce(
+    (acc, [currKey, currValue]) => {
+      if (currValue.type === 'dynamiczone') {
+        acc[currKey] = prepareDynamicZone(contentData[currKey]);
+      }
+      if (currValue.type === 'component' && currValue.repeatable === true) {
+        acc[currKey] = recursiveDiscoverOfComponents(
+          {
+            ...discoverRepeatableChildren(currValue.component, components),
+            repeatable: true,
+            uid: currValue.component,
+          },
+          contentData[currKey],
+        );
+      }
+      return acc;
+    },
+    {},
+  );
+  return rootContainers;
 };
 
-const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
+const CopyModal = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  isLoading,
+  allowedSourceTypes,
+  schemas,
+}) => {
   const { formatMessage } = useIntl();
   const toggleNotification = useNotification();
+
+  // Get current layout
   const { allLayoutData, modifiedData } = useCMEditViewDataManager();
-  const { contentType, components } = allLayoutData;
-  const { attributes } = contentType;
+  const { contentType: currentContentType, components: currentComponents } =
+    allLayoutData;
+  console.log('allLayoutData', allLayoutData);
+  console.log('modifiedData', modifiedData);
+  const { attributes: currentAttributes } = currentContentType;
 
   // Step number
-  const [stepNumber, setStepNumber] = useState(Steps.Target);
+  const [stepNumber, setStepNumber] = useState(Steps.TargetContainer);
 
   // Select target container
+  // console.log(
+  //   'y',
+  //   discoverRepeatableChildren(
+  //     'page-ui-elements-country.testcomp',
+  //     currentComponents,
+  //   ),
+  // );
+  console.log(discoverTargetContainers(allLayoutData, modifiedData));
+
   const targetSections = useMemo(
     () =>
-      Object.entries(attributes)
+      Object.entries(currentAttributes)
         .filter(([_key, value]) => value.type === 'dynamiczone')
         .map(([key, _value]) => key),
-    [attributes],
+    [currentAttributes],
   );
   const [selectedTarget, setSelectedTarget] = useState('');
+
+  // Select source type
+  const [tmpSelectedSourceType, setTmpSelectedSourceType] = useState('');
+  const [selectedSourceType, setSelectedSourceType] = useState('');
+  const [sourceLayout, setSourceLayout] = useState();
 
   // Select source slug
   const [availableSlugs, setAvailableSlugs] = useState([]);
@@ -116,14 +205,18 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const [availableComponents, setAvailableComponents] = useState([]);
   const [tmpSelectedComponent, setTmpSelectedComponent] = useState('');
 
+  // Modal initialization
   const initializeModal = () => {
-    if (targetSections.length == 1) {
+    // TODO
+    if (false && targetSections.length == 1) {
       setSelectedTarget(targetSections[0]);
-      setStepNumber(Steps.Slug);
+      setStepNumber(Steps.SourceSlug);
     } else {
       setSelectedTarget('');
-      setStepNumber(Steps.Target);
+      setStepNumber(Steps.TargetContainer);
     }
+    setTmpSelectedSourceType('');
+    setSelectedSourceType('');
     setTmpSelectedSlug('');
     setSelectedSlug('');
     setTmpSelectedComponent('');
@@ -133,33 +226,42 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
     initializeModal();
   }, []);
 
-  useEffect(() => {
-    if (uid) {
-      dataProxy
-        .getSlugs(uid)
-        .then(({ entities }) => {
-          setAvailableSlugs(
-            entities
-              .filter((e) => e.id !== modifiedData.id)
-              .map((e) => ({
-                ...e,
-                displayName: getDisplayName(contentType, e, false),
-              })),
-          );
-        })
-        .catch((_e) => {
-          toggleNotification({
-            type: 'warning',
-            message: { id: 'notification.error' },
-          });
-        });
-    }
-  }, [uid]);
+  // Fetch slugs and layout of source uid
+  useEffect(async () => {
+    if (selectedSourceType) {
+      try {
+        // Get layout
+        const _sourceLayout = await getSourceLayout(
+          selectedSourceType,
+          schemas,
+        );
+        setSourceLayout(_sourceLayout);
 
+        // Get slugs
+        const { entities } = await dataProxy.getSlugs(selectedSourceType);
+        setAvailableSlugs(
+          entities
+            .filter((e) => e.id !== modifiedData.id)
+            .map((e) => ({
+              ...e,
+              displayName: getDisplayName(_sourceLayout.contentType, e, false),
+            })),
+        );
+      } catch (error) {
+        console.error(error);
+        toggleNotification({
+          type: 'warning',
+          message: { id: 'notification.error' },
+        });
+      }
+    }
+  }, [selectedSourceType]);
+
+  // Fetch components of source slug
   useEffect(() => {
-    if (selectedSlug) {
+    if (selectedSourceType && selectedSlug) {
       dataProxy
-        .getComponents(uid, selectedSlug)
+        .getComponents(selectedSourceType, selectedSlug)
         .then(({ entity }) => {
           if (entity) {
             const cleanedData = cleanData(
@@ -172,7 +274,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
               cleanedData[selectedTarget].map((c, idx) => ({
                 ...c,
                 displayName: getDisplayName(
-                  getComponentLayout(components, c.__component),
+                  getComponentLayout(sourceLayout.components, c.__component),
                   c,
                 ),
                 index: `${idx}`,
@@ -187,17 +289,18 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           });
         });
     }
-  }, [selectedSlug]);
+  }, [selectedSourceType, selectedSlug]);
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     initializeModal();
     onClose();
   };
 
   const canProceed = () => {
     return (
-      (stepNumber === Steps.Target && selectedTarget !== '') ||
-      (stepNumber === Steps.Slug && tmpSelectedSlug !== '') ||
+      (stepNumber === Steps.TargetContainer && selectedTarget !== '') ||
+      (stepNumber === Steps.SourceType && tmpSelectedSourceType !== '') ||
+      (stepNumber === Steps.SourceSlug && tmpSelectedSlug !== '') ||
       (stepNumber === Steps.Component && tmpSelectedComponent !== '')
     );
   };
@@ -205,9 +308,12 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   const handleNext = () => {
     if (!canProceed()) return;
 
-    if (stepNumber === Steps.Target) {
-      setStepNumber(Steps.Slug);
-    } else if (stepNumber === Steps.Slug) {
+    if (stepNumber === Steps.TargetContainer) {
+      setStepNumber(Steps.SourceType);
+    } else if (stepNumber === Steps.SourceType) {
+      setSelectedSourceType(tmpSelectedSourceType);
+      setStepNumber(Steps.SourceSlug);
+    } else if (stepNumber === Steps.SourceSlug) {
       setSelectedSlug(tmpSelectedSlug);
       setStepNumber(Steps.Component);
     } else if (stepNumber === Steps.Component) {
@@ -230,15 +336,20 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
       );
 
       onSubmit(cleanedData);
+      initializeModal();
     }
   };
 
   const getModalTitle = useMemo(() => {
-    if (stepNumber == Steps.Target)
+    if (stepNumber == Steps.TargetContainer)
       return formatMessage({
         id: getTrad('modal.title.target'),
       });
-    if (stepNumber == Steps.Slug)
+    if (stepNumber == Steps.SourceType)
+      return formatMessage({
+        id: getTrad('modal.title.sourcetype'),
+      });
+    if (stepNumber == Steps.SourceSlug)
       return formatMessage({
         id: getTrad('modal.title.slug'),
       });
@@ -252,7 +363,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
 
   const getModalBody = () => {
     if (isLoading) return <Loader>Loading...</Loader>;
-    if (stepNumber === Steps.Target)
+    if (stepNumber === Steps.TargetContainer)
       return (
         <Box minWidth="100%">
           <Select
@@ -270,7 +381,25 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
           </Select>
         </Box>
       );
-    if (stepNumber === Steps.Slug)
+    if (stepNumber === Steps.SourceType)
+      return (
+        <Box minWidth="100%">
+          <Select
+            placeholder={formatMessage({
+              id: getTrad('modal.placeholder.sourcetype'),
+            })}
+            value={tmpSelectedSourceType}
+            onChange={setTmpSelectedSourceType}
+          >
+            {allowedSourceTypes.map((s) => (
+              <Option key={s} value={s}>
+                {s}
+              </Option>
+            ))}
+          </Select>
+        </Box>
+      );
+    if (stepNumber === Steps.SourceSlug)
       return (
         <Box minWidth="100%">
           <Select
@@ -310,7 +439,7 @@ const CopyModal = ({ isOpen, onClose, onSubmit, isLoading, uid }) => {
   };
 
   return (
-    <Dialog onClose={onClose} title={getModalTitle} isOpen={isOpen}>
+    <Dialog onClose={handleCancel} title={getModalTitle} isOpen={isOpen}>
       <ModifiedDialogBody isLoading={isLoading}>
         <Flex direction="column" alignItems="center" gap={2}>
           {getModalBody()}
