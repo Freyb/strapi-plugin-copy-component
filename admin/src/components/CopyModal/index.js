@@ -75,7 +75,10 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
         c.hasOwnProperty('id'),
       );
       if (componentDataFiltered.length == 0 || attributes.length == 0)
-        return { container: true };
+        return {
+          allowedComponents: [uid],
+          container: true,
+        };
 
       return {
         ...componentDataFiltered.map((_componentData) => ({
@@ -93,6 +96,7 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
           }, {}),
           container: false,
         })),
+        allowedComponents: [uid],
         container: true,
       };
     } else {
@@ -141,7 +145,10 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
   const rootContainers = Object.entries(contentType.attributes).reduce(
     (acc, [currKey, currValue]) => {
       if (currValue.type === 'dynamiczone') {
-        acc[currKey] = prepareDynamicZone(contentData[currKey]);
+        acc[currKey] = {
+          ...prepareDynamicZone(contentData[currKey]),
+          allowedComponents: currValue.components,
+        };
       }
       if (currValue.type === 'component' && currValue.repeatable === true) {
         acc[currKey] = recursiveDiscoverOfComponents(
@@ -378,7 +385,8 @@ const CopyModal = ({
     const recursiveConvertToUIComponent = (parentKey, rootComponent) => {
       const [entryKey, entryValue] = rootComponent;
       if (!entryValue) return;
-      const { container, id, displayName, ...rest } = entryValue;
+      const { container, id, displayName, allowedComponents, ...rest } =
+        entryValue;
 
       const key = `${parentKey}.${entryKey}`;
       const label = displayName ? `${displayName}-${id}` : entryKey;
