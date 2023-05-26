@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Flex, Box } from '@strapi/design-system';
+import { Flex, Box, Typography } from '@strapi/design-system';
 
 const WrappedButton = styled(Box)`
   svg {
@@ -10,7 +10,14 @@ const WrappedButton = styled(Box)`
 `;
 const ModifiedDialogBody = ({ children, icon, isLoading }) => {
   return (
-    <Box paddingTop="8" paddingBottom="8" paddingLeft="6" paddingRight="6">
+    <Box
+      paddingTop="8"
+      paddingBottom="8"
+      paddingLeft="6"
+      paddingRight="6"
+      maxHeight="20rem"
+      style={{ overflowY: 'auto' }}
+    >
       {!isLoading && icon && (
         <WrappedButton paddingBottom="2">
           <Flex justifyContent="center">{icon}</Flex>
@@ -21,4 +28,11 @@ const ModifiedDialogBody = ({ children, icon, isLoading }) => {
   );
 };
 
-export default ModifiedDialogBody;
+const RadioTypography = styled(Typography)`
+  display: inline-block;
+  line-height: 1.5;
+  font-size: 1rem;
+  color: initial;
+`;
+
+export { ModifiedDialogBody, RadioTypography };

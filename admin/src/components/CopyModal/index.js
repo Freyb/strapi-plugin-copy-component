@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { set } from 'lodash';
+import { get, set } from 'lodash';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -10,12 +10,13 @@ import {
   //   DialogBody,
   DialogFooter,
   Flex,
-  // Typography,
   Button,
   Box,
   Loader,
   Select,
   Option,
+  Radio,
+  RadioGroup,
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
 import { ChevronRight, Check } from '@strapi/icons';
@@ -24,6 +25,7 @@ import dataProxy from '../../proxy/DataProxy';
 import {
   getDisplayName,
   ModifiedDialogBody,
+  RadioTypography,
   getComponentLayout,
   getSourceLayout,
 } from './helpers';
@@ -58,7 +60,10 @@ const discoverRepeatableChildren = (rootComponent, components) => {
     );
     return result;
   };
-  return recursiveDisvoverRepeatableChildren(rootComponent);
+  return {
+    ...recursiveDisvoverRepeatableChildren(rootComponent),
+    uid: rootComponent,
+  };
 };
 
 const discoverTargetContainers = ({ contentType, components }, contentData) => {
@@ -93,9 +98,17 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
     } else {
       if (!componentData) return null;
       return {
-        ...attributes.reduce((acc, [key, value]) => {
-          acc[key] = recursiveDiscoverOfComponents(value, componentData[key]);
-          return acc;
+        id: componentData.id,
+        displayName: getDisplayName(
+          getComponentLayout(components, uid),
+          componentData,
+        ),
+        ...attributes.reduce((attrAcc, [key, value]) => {
+          attrAcc[key] = recursiveDiscoverOfComponents(
+            value,
+            componentData[key],
+          );
+          return attrAcc;
         }, {}),
         container: false,
       };
@@ -114,7 +127,8 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
           _componentData.__component,
           components,
         );
-        if (Object.keys(componentHierarchy).length === 0) return null;
+        const { repeatable: _r, uid: _u, ...rest } = componentHierarchy;
+        if (Object.keys(rest).length === 0) return null;
         return recursiveDiscoverOfComponents(
           componentHierarchy,
           _componentData,
@@ -134,7 +148,6 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
           {
             ...discoverRepeatableChildren(currValue.component, components),
             repeatable: true,
-            uid: currValue.component,
           },
           contentData[currKey],
         );
@@ -158,33 +171,31 @@ const CopyModal = ({
   const toggleNotification = useNotification();
 
   // Get current layout
-  const { allLayoutData, modifiedData } = useCMEditViewDataManager();
-  const { contentType: currentContentType, components: currentComponents } =
-    allLayoutData;
+  const { allLayoutData, modifiedData, initialData } =
+    useCMEditViewDataManager();
+  // const { contentType: currentContentType, components: currentComponents } =
+  //   allLayoutData;
   console.log('allLayoutData', allLayoutData);
   console.log('modifiedData', modifiedData);
-  const { attributes: currentAttributes } = currentContentType;
+  // const { attributes: currentAttributes } = currentContentType;
 
   // Step number
   const [stepNumber, setStepNumber] = useState(Steps.TargetContainer);
 
   // Select target container
-  // console.log(
-  //   'y',
-  //   discoverRepeatableChildren(
-  //     'page-ui-elements-country.testcomp',
-  //     currentComponents,
-  //   ),
-  // );
-  console.log(discoverTargetContainers(allLayoutData, modifiedData));
-
-  const targetSections = useMemo(
-    () =>
-      Object.entries(currentAttributes)
-        .filter(([_key, value]) => value.type === 'dynamiczone')
-        .map(([key, _value]) => key),
-    [currentAttributes],
+  const targetSectionHierarchy = useMemo(
+    () => discoverTargetContainers(allLayoutData, initialData),
+    [allLayoutData, initialData],
   );
+  console.log(targetSectionHierarchy);
+
+  // const targetSections = useMemo(
+  //   () =>
+  //     Object.entries(currentAttributes)
+  //       .filter(([_key, value]) => value.type === 'dynamiczone')
+  //       .map(([key, _value]) => key),
+  //   [currentAttributes],
+  // );
   const [selectedTarget, setSelectedTarget] = useState('');
 
   // Select source type
@@ -207,10 +218,10 @@ const CopyModal = ({
 
   // Modal initialization
   const initializeModal = () => {
-    // TODO
-    if (false && targetSections.length == 1) {
-      setSelectedTarget(targetSections[0]);
-      setStepNumber(Steps.SourceSlug);
+    // TODO: REVERT logic
+    if (false) {
+      // setSelectedTarget(targetSections[0]);
+      // setStepNumber(Steps.SourceSlug);
     } else {
       setSelectedTarget('');
       setStepNumber(Steps.TargetContainer);
@@ -271,7 +282,8 @@ const CopyModal = ({
             );
 
             setAvailableComponents(
-              cleanedData[selectedTarget].map((c, idx) => ({
+              // TODO: Fetch it from source container
+              get(cleanedData, ['Content']).map((c, idx) => ({
                 ...c,
                 displayName: getDisplayName(
                   getComponentLayout(sourceLayout.components, c.__component),
@@ -282,7 +294,8 @@ const CopyModal = ({
             );
           }
         })
-        .catch((_e) => {
+        .catch((e) => {
+          console.error(e);
           toggleNotification({
             type: 'warning',
             message: { id: 'notification.error' },
@@ -329,11 +342,11 @@ const CopyModal = ({
       );
 
       const cleanedData = { ...modifiedData };
-      set(
-        cleanedData,
-        [selectedTarget],
-        [...modifiedData[selectedTarget], cleanedComponent],
-      );
+      const selectedTargetPath = selectedTarget.split('.').slice(1);
+      set(cleanedData, selectedTargetPath, [
+        ...get(modifiedData, selectedTargetPath),
+        cleanedComponent,
+      ]);
 
       onSubmit(cleanedData);
       initializeModal();
@@ -361,24 +374,50 @@ const CopyModal = ({
     return '';
   }, [stepNumber]);
 
+  const convertHierarhyToUIComponent = (hierarchy) => {
+    const recursiveConvertToUIComponent = (parentKey, rootComponent) => {
+      const [entryKey, entryValue] = rootComponent;
+      if (!entryValue) return;
+      const { container, id, displayName, ...rest } = entryValue;
+
+      const key = `${parentKey}.${entryKey}`;
+      const label = displayName ? `${displayName}-${id}` : entryKey;
+      const margin = parentKey.split('.').length - 1;
+      return (
+        <>
+          <Box marginLeft={`${margin * 1.2}rem`}>
+            <Radio key={key} value={key} disabled={!container}>
+              <RadioTypography>{label}</RadioTypography>
+            </Radio>
+          </Box>
+          {Object.entries(rest).map((entry) =>
+            recursiveConvertToUIComponent(key, entry),
+          )}
+        </>
+      );
+    };
+    return (
+      <>
+        {Object.entries(hierarchy).map((entry) =>
+          recursiveConvertToUIComponent('', entry),
+        )}
+      </>
+    );
+  };
+
+  console.log(selectedTarget);
+
   const getModalBody = () => {
     if (isLoading) return <Loader>Loading...</Loader>;
     if (stepNumber === Steps.TargetContainer)
       return (
         <Box minWidth="100%">
-          <Select
-            placeholder={formatMessage({
-              id: getTrad('modal.placeholder.target'),
-            })}
+          <RadioGroup
+            onChange={(e) => setSelectedTarget(e.target.value)}
             value={selectedTarget}
-            onChange={setSelectedTarget}
           >
-            {targetSections.map((s) => (
-              <Option key={s} value={s}>
-                {s}
-              </Option>
-            ))}
-          </Select>
+            {convertHierarhyToUIComponent(targetSectionHierarchy)}
+          </RadioGroup>
         </Box>
       );
     if (stepNumber === Steps.SourceType)
