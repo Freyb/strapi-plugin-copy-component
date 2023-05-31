@@ -123,7 +123,7 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
         container: true,
       };
     } else {
-      if (!componentData) return null;
+      if (!componentData || attributes.length == 0) return null;
       return {
         id: componentData.id,
         displayName: getDisplayName(
@@ -210,11 +210,11 @@ const discoverSourceComponents = (
             __component: uid,
           })),
         }),
-        ...componentData.map((componentDataElement) => {
+        ...componentData.map((componentElementData) => {
           const elementResult = attributes.reduce((attrAcc, [key, value]) => {
             const attributeResult = _recursiveDiscoverOfComponents(
               value,
-              componentDataElement[key],
+              componentElementData[key],
             );
             if (!attributeResult) return attrAcc;
             attrAcc[key] = attributeResult;
@@ -225,12 +225,16 @@ const discoverSourceComponents = (
             ...elementResult,
             displayName: getDisplayName(
               getComponentLayout(components, uid),
-              componentDataElement,
+              componentElementData,
             ),
           };
         }),
       };
-      if (isEmpty(componentResult)) return null;
+      if (
+        isEmpty(componentResult) ||
+        !Object.values(componentResult).some((x) => !!x)
+      )
+        return null;
       return componentResult;
     } else {
       if (!componentData) return null;
