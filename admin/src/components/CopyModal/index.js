@@ -221,7 +221,13 @@ const discoverSourceComponents = (
             return attrAcc;
           }, {});
           if (isEmpty(elementResult)) return null;
-          return elementResult;
+          return {
+            ...elementResult,
+            displayName: getDisplayName(
+              getComponentLayout(components, uid),
+              componentDataElement,
+            ),
+          };
         }),
       };
       if (isEmpty(componentResult)) return null;
@@ -255,7 +261,13 @@ const discoverSourceComponents = (
         ...elementResult,
       };
       if (isEmpty(componentResult)) return null;
-      return componentResult;
+      return {
+        ...componentResult,
+        displayName: getDisplayName(
+          getComponentLayout(components, uid),
+          componentData,
+        ),
+      };
     }
   };
 
@@ -300,6 +312,7 @@ const discoverSourceComponents = (
     },
     {},
   );
+  console.log('rootContainers', rootContainers);
   return rootContainers;
 };
 
@@ -522,17 +535,17 @@ const CopyModal = ({
       if (!entryValue) return;
       const {
         container,
-        id,
         displayName,
+        id: _id,
         allowedComponents: _a,
         _foundComponents,
         ...rest
       } = entryValue;
 
       const key = `${parentKey}.${entryKey}`;
-      const label = displayName ? `${displayName}-${id}` : entryKey;
-      // const margin = parentKey.split('.').length - 1;
-      if (isTargetRender)
+      console.log('rootComponent', rootComponent);
+      if (isTargetRender) {
+        const label = displayName ? displayName : entryKey;
         return (
           <>
             <Box marginLeft="1.2rem">
@@ -545,7 +558,8 @@ const CopyModal = ({
             </Box>
           </>
         );
-      else
+      } else {
+        const label = displayName ? `(${entryKey}) ${displayName}` : entryKey;
         return (
           <>
             <Box marginLeft="1.2rem">
@@ -571,7 +585,7 @@ const CopyModal = ({
               {_foundComponents && !isArray(_foundComponents) && (
                 <Radio value={`${key}._foundComponents`}>
                   <RadioTypography>
-                    {`(${label}) ${_foundComponents.displayName}`}
+                    {`(${entryKey}) ${_foundComponents.displayName}`}
                   </RadioTypography>
                 </Radio>
               )}
@@ -581,6 +595,7 @@ const CopyModal = ({
             </Box>
           </>
         );
+      }
     };
     return (
       <Box marginLeft="-1.2rem">
