@@ -334,9 +334,9 @@ const CopyModal = ({
   );
 
   // Select source type
+  const [allSourceLayouts, setAllSourceLayouts] = useState();
   const [tmpSelectedSourceType, setTmpSelectedSourceType] = useState('');
   const [selectedSourceType, setSelectedSourceType] = useState('');
-  const [sourceLayout, setSourceLayout] = useState();
 
   // Select source slug
   const [availableSlugs, setAvailableSlugs] = useState([]);
@@ -372,16 +372,23 @@ const CopyModal = ({
     initializeModal();
   }, []);
 
-  // Fetch slugs and layout of source uid
   useEffect(async () => {
-    if (selectedSourceType) {
+    const sourceLayouts = await Promise.all(
+      allowedSourceTypes.map((s) => getSourceLayout(s, schemas)),
+    );
+    setAllSourceLayouts(
+      sourceLayouts.reduce((acc, curr, idx) => {
+        return { ...acc, [allowedSourceTypes[idx]]: curr };
+      }, {}),
+    );
+  }, []);
+
+  // Fetch slugs by layout of source uid
+  useEffect(async () => {
+    if (selectedSourceType && allSourceLayouts) {
       try {
         // Get layout
-        const _sourceLayout = await getSourceLayout(
-          selectedSourceType,
-          schemas,
-        );
-        setSourceLayout(_sourceLayout);
+        const sourceLayout = allSourceLayouts[selectedSourceType];
 
         // Get slugs
         const { entities } = await dataProxy.getSlugs(selectedSourceType);
@@ -390,7 +397,7 @@ const CopyModal = ({
             .filter((e) => e.id !== modifiedData.id)
             .map((e) => ({
               ...e,
-              displayName: getDisplayName(_sourceLayout.contentType, e, false),
+              displayName: getDisplayName(sourceLayout.contentType, e, false),
             })),
         );
       } catch (error) {
@@ -405,7 +412,7 @@ const CopyModal = ({
 
   // Fetch components of source slug
   useEffect(() => {
-    if (selectedSourceType && selectedSlug) {
+    if (selectedSourceType && allSourceLayouts && selectedSlug) {
       dataProxy
         .getComponents(selectedSourceType, selectedSlug)
         .then(({ entity }) => {
@@ -415,6 +422,7 @@ const CopyModal = ({
               allLayoutData,
               entity.localizations,
             );
+            const sourceLayout = allSourceLayouts[selectedSourceType];
             const sourceComponents = discoverSourceComponents(
               sourceLayout,
               cleanedData,
@@ -602,11 +610,12 @@ const CopyModal = ({
             value={tmpSelectedSourceType}
             onChange={setTmpSelectedSourceType}
           >
-            {allowedSourceTypes.map((s) => (
-              <Option key={s} value={s}>
-                {s}
-              </Option>
-            ))}
+            {allSourceLayouts &&
+              Object.entries(allSourceLayouts).map(([uid, layout]) => (
+                <Option key={uid} value={uid}>
+                  {layout.contentType.info.displayName}
+                </Option>
+              ))}
           </Select>
         </Box>
       );
