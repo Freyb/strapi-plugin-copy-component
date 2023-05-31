@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { get, set, isEmpty, isArray, cloneDeep } from 'lodash';
+import { get, set, isEmpty, isArray, cloneDeep, orderBy } from 'lodash';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -393,12 +393,16 @@ const CopyModal = ({
         // Get slugs
         const { entities } = await dataProxy.getSlugs(selectedSourceType);
         setAvailableSlugs(
-          entities
-            .filter((e) => e.id !== modifiedData.id)
-            .map((e) => ({
-              ...e,
-              displayName: getDisplayName(sourceLayout.contentType, e, false),
-            })),
+          orderBy(
+            entities
+              .filter((e) => e.id !== modifiedData.id)
+              .map((e) => ({
+                ...e,
+                displayName: getDisplayName(sourceLayout.contentType, e, false),
+              })),
+            ['displayName'],
+            ['asc'],
+          ),
         );
       } catch (error) {
         console.error(error);
