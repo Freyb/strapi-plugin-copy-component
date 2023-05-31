@@ -206,6 +206,7 @@ const discoverSourceComponents = (
         ...(currentUidIncluded && {
           _foundComponents: foundComponents.map((c) => ({
             ...c,
+            displayName: getDisplayName(getComponentLayout(components, uid), c),
             __component: uid,
           })),
         }),
@@ -242,7 +243,14 @@ const discoverSourceComponents = (
       }, {});
       const componentResult = {
         ...(currentUidIncluded && {
-          _foundComponents: { ...foundComponent, __component: uid },
+          _foundComponents: {
+            ...foundComponent,
+            displayName: getDisplayName(
+              getComponentLayout(components, uid),
+              foundComponent,
+            ),
+            __component: uid,
+          },
         }),
         ...elementResult,
       };
@@ -541,11 +549,7 @@ const CopyModal = ({
                           key={`${key}.${idx}`}
                           value={`${key}._foundComponents.${idx}`}
                         >
-                          <RadioTypography>
-                            {
-                              entry.displayName ?? entry.Title ?? 'Hello' // TODO
-                            }
-                          </RadioTypography>
+                          <RadioTypography>{entry.displayName}</RadioTypography>
                         </Radio>
                       ))}
                     </Box>
@@ -554,7 +558,9 @@ const CopyModal = ({
               )}
               {_foundComponents && !isArray(_foundComponents) && (
                 <Radio value={`${key}._foundComponents`}>
-                  <RadioTypography>{label}</RadioTypography>
+                  <RadioTypography>
+                    {`(${label}) ${_foundComponents.displayName}`}
+                  </RadioTypography>
                 </Radio>
               )}
               {Object.entries(rest).map((entry) =>

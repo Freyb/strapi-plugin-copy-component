@@ -8,7 +8,6 @@ const getComponentLayout = (allComponents, componentUid) => {
 const getSourceLayout = async (uid, schemas) => {
   const configData = await dataProxy.getLayout(uid);
   const formattedData = formatLayouts(configData, schemas);
-  console.log('sourceLayout for ', uid, formattedData); // TODO
   return formattedData;
 };
 
