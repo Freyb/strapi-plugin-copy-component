@@ -316,7 +316,6 @@ const discoverSourceComponents = (
     },
     {},
   );
-  console.log('rootContainers', rootContainers);
   return rootContainers;
 };
 
@@ -547,9 +546,9 @@ const CopyModal = ({
       } = entryValue;
 
       const key = `${parentKey}.${entryKey}`;
-      console.log('rootComponent', rootComponent);
+      const label = displayName ? displayName : entryKey;
+
       if (isTargetRender) {
-        const label = displayName ? displayName : entryKey;
         return (
           <>
             <Box marginLeft="1.2rem">
@@ -563,7 +562,6 @@ const CopyModal = ({
           </>
         );
       } else {
-        const label = displayName ? `(${entryKey}) ${displayName}` : entryKey;
         return (
           <>
             <Box marginLeft="1.2rem">
@@ -589,7 +587,7 @@ const CopyModal = ({
               {_foundComponents && !isArray(_foundComponents) && (
                 <Radio value={`${key}._foundComponents`}>
                   <RadioTypography>
-                    {`(${entryKey}) ${_foundComponents.displayName}`}
+                    {_foundComponents.displayName}
                   </RadioTypography>
                 </Radio>
               )}
