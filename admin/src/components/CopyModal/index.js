@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import PropTypes from 'prop-types';
-import { get, set } from 'lodash';
+import { get, set, isEmpty, isArray, cloneDeep } from 'lodash';
 import {
   useNotification,
   useCMEditViewDataManager,
@@ -29,7 +29,7 @@ import {
   getComponentLayout,
   getSourceLayout,
 } from './helpers';
-// import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
+import { getMaxTempKey } from '@strapi/admin/admin/src/content-manager/utils';
 import { cleanData } from '@strapi/plugin-i18n/admin/src/components/CMEditViewInjectedComponents/CMEditViewCopyLocale/utils';
 
 const Steps = {
@@ -39,15 +39,26 @@ const Steps = {
   Component: 'Component',
 };
 
-const discoverRepeatableChildren = (rootComponent, components) => {
-  const recursiveDisvoverRepeatableChildren = (component) => {
-    const layout = getComponentLayout(components, component);
+const discoverComponentHierarchy = (
+  rootComponentUid,
+  componentList,
+  filterBranch,
+) => {
+  const _recursiveDisvoverComponentHierarchy = (componentUid) => {
+    const layout = getComponentLayout(componentList, componentUid);
     const result = Object.entries(layout.attributes).reduce(
       (acc, [currKey, currValue]) => {
         if (currValue.type === 'component') {
-          const subComponentResult = recursiveDisvoverRepeatableChildren(
+          const subComponentResult = _recursiveDisvoverComponentHierarchy(
             currValue.component,
           );
+          if (
+            isArray(filterBranch) &&
+            isEmpty(subComponentResult) &&
+            !filterBranch.includes(currValue.component)
+          ) {
+            return acc;
+          }
           acc[currKey] = {
             ...subComponentResult,
             uid: currValue.component,
@@ -60,14 +71,26 @@ const discoverRepeatableChildren = (rootComponent, components) => {
     );
     return result;
   };
+  const subComponentResult =
+    _recursiveDisvoverComponentHierarchy(rootComponentUid);
+  if (
+    isArray(filterBranch) &&
+    isEmpty(subComponentResult) &&
+    !filterBranch.includes(rootComponentUid)
+  ) {
+    return {};
+  }
   return {
-    ...recursiveDisvoverRepeatableChildren(rootComponent),
-    uid: rootComponent,
+    ...subComponentResult,
+    uid: rootComponentUid,
   };
 };
 
 const discoverTargetContainers = ({ contentType, components }, contentData) => {
-  const recursiveDiscoverOfComponents = (componentHierarchy, componentData) => {
+  const _recursiveDiscoverOfContainers = (
+    componentHierarchy,
+    componentData,
+  ) => {
     const { repeatable, uid, ...rest } = componentHierarchy;
     const attributes = Object.entries(rest);
     if (repeatable) {
@@ -88,7 +111,7 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
             _componentData,
           ),
           ...attributes.reduce((attrAcc, [key, value]) => {
-            attrAcc[key] = recursiveDiscoverOfComponents(
+            attrAcc[key] = _recursiveDiscoverOfContainers(
               value,
               _componentData[key],
             );
@@ -108,7 +131,7 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
           componentData,
         ),
         ...attributes.reduce((attrAcc, [key, value]) => {
-          attrAcc[key] = recursiveDiscoverOfComponents(
+          attrAcc[key] = _recursiveDiscoverOfContainers(
             value,
             componentData[key],
           );
@@ -119,43 +142,149 @@ const discoverTargetContainers = ({ contentType, components }, contentData) => {
     }
   };
 
-  const prepareDynamicZone = (componentData) => {
-    const componentDataFiltered = componentData.filter((c) =>
-      c.hasOwnProperty('id'),
-    );
-    if (componentDataFiltered.length == 0) return {};
-
-    return {
-      ...componentDataFiltered.map((_componentData) => {
-        const componentHierarchy = discoverRepeatableChildren(
-          _componentData.__component,
-          components,
+  const rootContainers = Object.entries(contentType.attributes).reduce(
+    (acc, [currKey, currValue]) => {
+      if (currValue.type === 'dynamiczone') {
+        const componentDataFiltered = contentData[currKey].filter((c) =>
+          c.hasOwnProperty('id'),
         );
-        const { repeatable: _r, uid: _u, ...rest } = componentHierarchy;
-        if (Object.keys(rest).length === 0) return null;
-        return recursiveDiscoverOfComponents(
+        acc[currKey] = {
+          ...componentDataFiltered.map((_componentData) => {
+            const componentHierarchy = discoverComponentHierarchy(
+              _componentData.__component,
+              components,
+            );
+            const { repeatable: _r, uid: _u, ...rest } = componentHierarchy;
+            if (Object.keys(rest).length === 0) return null;
+            return _recursiveDiscoverOfContainers(
+              componentHierarchy,
+              _componentData,
+            );
+          }),
+          container: true,
+          allowedComponents: currValue.components,
+        };
+      } else if (
+        currValue.type === 'component' &&
+        currValue.repeatable === true
+      ) {
+        const componentHierarchy = {
+          ...discoverComponentHierarchy(currValue.component, components),
+          repeatable: true,
+        };
+        acc[currKey] = _recursiveDiscoverOfContainers(
           componentHierarchy,
-          _componentData,
+          contentData[currKey],
         );
-      }),
-      container: true,
-    };
+      }
+      return acc;
+    },
+    {},
+  );
+  return rootContainers;
+};
+
+const discoverSourceComponents = (
+  { contentType, components },
+  contentData,
+  allowedComponents,
+) => {
+  const _recursiveDiscoverOfComponents = (
+    componentHierarchy,
+    componentData,
+  ) => {
+    const { repeatable, uid, ...rest } = componentHierarchy;
+    const attributes = Object.entries(rest);
+
+    if (repeatable) {
+      if (componentData.length == 0) return null;
+
+      const currentUidIncluded = allowedComponents.includes(uid);
+      const foundComponents = currentUidIncluded ? componentData : {};
+
+      const componentResult = {
+        ...(currentUidIncluded && {
+          _foundComponents: foundComponents.map((c) => ({
+            ...c,
+            __component: uid,
+          })),
+        }),
+        ...componentData.map((componentDataElement) => {
+          const elementResult = attributes.reduce((attrAcc, [key, value]) => {
+            const attributeResult = _recursiveDiscoverOfComponents(
+              value,
+              componentDataElement[key],
+            );
+            if (!attributeResult) return attrAcc;
+            attrAcc[key] = attributeResult;
+            return attrAcc;
+          }, {});
+          if (isEmpty(elementResult)) return null;
+          return elementResult;
+        }),
+      };
+      if (isEmpty(componentResult)) return null;
+      return componentResult;
+    } else {
+      if (!componentData) return null;
+
+      const currentUidIncluded = allowedComponents.includes(uid);
+      const foundComponent = currentUidIncluded ? componentData : {};
+
+      const elementResult = attributes.reduce((attrAcc, [key, value]) => {
+        const attributeResult = _recursiveDiscoverOfComponents(
+          value,
+          componentData[key],
+        );
+        if (!attributeResult) return attrAcc;
+        attrAcc[key] = attributeResult;
+        return attrAcc;
+      }, {});
+      const componentResult = {
+        ...(currentUidIncluded && {
+          _foundComponents: { ...foundComponent, __component: uid },
+        }),
+        ...elementResult,
+      };
+      if (isEmpty(componentResult)) return null;
+      return componentResult;
+    }
   };
 
   const rootContainers = Object.entries(contentType.attributes).reduce(
     (acc, [currKey, currValue]) => {
       if (currValue.type === 'dynamiczone') {
-        acc[currKey] = {
-          ...prepareDynamicZone(contentData[currKey]),
-          allowedComponents: currValue.components,
-        };
-      }
-      if (currValue.type === 'component' && currValue.repeatable === true) {
-        acc[currKey] = recursiveDiscoverOfComponents(
-          {
-            ...discoverRepeatableChildren(currValue.component, components),
-            repeatable: true,
+        const dynamicZoneComponents = contentData[currKey].map(
+          (_componentData) => {
+            const componentHierarchy = discoverComponentHierarchy(
+              _componentData.__component,
+              components,
+              allowedComponents,
+            );
+            if (isEmpty(componentHierarchy)) return null;
+
+            return _recursiveDiscoverOfComponents(
+              componentHierarchy,
+              _componentData,
+            );
           },
+        );
+        if (dynamicZoneComponents.length == 0) return acc;
+
+        acc[currKey] = dynamicZoneComponents;
+      } else if (
+        currValue.type === 'component' &&
+        currValue.repeatable === true
+      ) {
+        const componentHierarchy = discoverComponentHierarchy(
+          currValue.component,
+          components,
+          allowedComponents,
+        );
+        if (isEmpty(componentHierarchy)) return acc;
+
+        acc[currKey] = _recursiveDiscoverOfComponents(
+          { ...componentHierarchy, repeatable: true },
           contentData[currKey],
         );
       }
@@ -180,11 +309,6 @@ const CopyModal = ({
   // Get current layout
   const { allLayoutData, modifiedData, initialData } =
     useCMEditViewDataManager();
-  // const { contentType: currentContentType, components: currentComponents } =
-  //   allLayoutData;
-  console.log('allLayoutData', allLayoutData);
-  console.log('modifiedData', modifiedData);
-  // const { attributes: currentAttributes } = currentContentType;
 
   // Step number
   const [stepNumber, setStepNumber] = useState(Steps.TargetContainer);
@@ -194,16 +318,12 @@ const CopyModal = ({
     () => discoverTargetContainers(allLayoutData, initialData),
     [allLayoutData, initialData],
   );
-  console.log(targetSectionHierarchy);
 
-  // const targetSections = useMemo(
-  //   () =>
-  //     Object.entries(currentAttributes)
-  //       .filter(([_key, value]) => value.type === 'dynamiczone')
-  //       .map(([key, _value]) => key),
-  //   [currentAttributes],
-  // );
   const [selectedTarget, setSelectedTarget] = useState('');
+  const selectedTargetPath = useMemo(
+    () => selectedTarget.split('.').slice(1),
+    [selectedTarget],
+  );
 
   // Select source type
   const [tmpSelectedSourceType, setTmpSelectedSourceType] = useState('');
@@ -287,18 +407,12 @@ const CopyModal = ({
               allLayoutData,
               entity.localizations,
             );
-
-            setAvailableComponents(
-              // TODO: Fetch it from source container
-              get(cleanedData, ['Content']).map((c, idx) => ({
-                ...c,
-                displayName: getDisplayName(
-                  getComponentLayout(sourceLayout.components, c.__component),
-                  c,
-                ),
-                index: `${idx}`,
-              })),
+            const sourceComponents = discoverSourceComponents(
+              sourceLayout,
+              cleanedData,
+              get(targetSectionHierarchy, selectedTargetPath).allowedComponents,
             );
+            setAvailableComponents(sourceComponents);
           }
         })
         .catch((e) => {
@@ -337,9 +451,11 @@ const CopyModal = ({
       setSelectedSlug(tmpSelectedSlug);
       setStepNumber(Steps.Component);
     } else if (stepNumber === Steps.Component) {
-      const selectedComponent = availableComponents.find(
-        (x) => x.index === tmpSelectedComponent,
-      );
+      const sourceComponentPath = tmpSelectedComponent.split('.').slice(1);
+      const selectedComponent = get(availableComponents, sourceComponentPath);
+
+      const newContentData = cloneDeep(modifiedData);
+      const originalTargetData = get(modifiedData, selectedTargetPath);
 
       const fieldsToRemove = ['index', 'displayName'];
       const cleanedComponent = Object.fromEntries(
@@ -347,15 +463,14 @@ const CopyModal = ({
           ([key, _value]) => !fieldsToRemove.includes(key),
         ),
       );
+      cleanedComponent.__temp_key__ = getMaxTempKey(originalTargetData) + 1;
 
-      const cleanedData = { ...modifiedData };
-      const selectedTargetPath = selectedTarget.split('.').slice(1);
-      set(cleanedData, selectedTargetPath, [
-        ...get(modifiedData, selectedTargetPath),
+      set(newContentData, selectedTargetPath, [
+        ...originalTargetData,
         cleanedComponent,
       ]);
 
-      onSubmit(cleanedData);
+      onSubmit(newContentData);
       initializeModal();
     }
   };
@@ -381,39 +496,82 @@ const CopyModal = ({
     return '';
   }, [stepNumber]);
 
-  const convertHierarhyToUIComponent = (hierarchy) => {
+  const convertHierarhyToUIComponent = (hierarchy, isTargetRender) => {
     const recursiveConvertToUIComponent = (parentKey, rootComponent) => {
       const [entryKey, entryValue] = rootComponent;
       if (!entryValue) return;
-      const { container, id, displayName, allowedComponents, ...rest } =
-        entryValue;
+      const {
+        container,
+        id,
+        displayName,
+        allowedComponents: _a,
+        _foundComponents,
+        ...rest
+      } = entryValue;
 
       const key = `${parentKey}.${entryKey}`;
       const label = displayName ? `${displayName}-${id}` : entryKey;
-      const margin = parentKey.split('.').length - 1;
-      return (
-        <>
-          <Box marginLeft={`${margin * 1.2}rem`}>
-            <Radio key={key} value={key} disabled={!container}>
-              <RadioTypography>{label}</RadioTypography>
-            </Radio>
-          </Box>
-          {Object.entries(rest).map((entry) =>
-            recursiveConvertToUIComponent(key, entry),
-          )}
-        </>
-      );
+      // const margin = parentKey.split('.').length - 1;
+      if (isTargetRender)
+        return (
+          <>
+            <Box marginLeft="1.2rem">
+              <Radio value={key} disabled={!container}>
+                <RadioTypography>{label}</RadioTypography>
+              </Radio>
+              {Object.entries(rest).map((entry) =>
+                recursiveConvertToUIComponent(key, entry),
+              )}
+            </Box>
+          </>
+        );
+      else
+        return (
+          <>
+            <Box marginLeft="1.2rem">
+              {(!_foundComponents || isArray(_foundComponents)) && (
+                <>
+                  <Radio value={key} disabled>
+                    <RadioTypography>{label}</RadioTypography>
+                  </Radio>
+                  {_foundComponents && (
+                    <Box marginLeft="1.2rem">
+                      {_foundComponents.map((entry, idx) => (
+                        <Radio
+                          key={`${key}.${idx}`}
+                          value={`${key}._foundComponents.${idx}`}
+                        >
+                          <RadioTypography>
+                            {
+                              entry.displayName ?? entry.Title ?? 'Hello' // TODO
+                            }
+                          </RadioTypography>
+                        </Radio>
+                      ))}
+                    </Box>
+                  )}
+                </>
+              )}
+              {_foundComponents && !isArray(_foundComponents) && (
+                <Radio value={`${key}._foundComponents`}>
+                  <RadioTypography>{label}</RadioTypography>
+                </Radio>
+              )}
+              {Object.entries(rest).map((entry) =>
+                recursiveConvertToUIComponent(key, entry),
+              )}
+            </Box>
+          </>
+        );
     };
     return (
-      <>
+      <Box marginLeft="-1.2rem">
         {Object.entries(hierarchy).map((entry) =>
           recursiveConvertToUIComponent('', entry),
         )}
-      </>
+      </Box>
     );
   };
-
-  console.log(selectedTarget);
 
   const getModalBody = () => {
     if (isLoading) return <Loader>Loading...</Loader>;
@@ -424,7 +582,7 @@ const CopyModal = ({
             onChange={(e) => setSelectedTarget(e.target.value)}
             value={selectedTarget}
           >
-            {convertHierarhyToUIComponent(targetSectionHierarchy)}
+            {convertHierarhyToUIComponent(targetSectionHierarchy, true)}
           </RadioGroup>
         </Box>
       );
@@ -467,19 +625,12 @@ const CopyModal = ({
     if (stepNumber === Steps.Component)
       return (
         <Box minWidth="100%">
-          <Select
-            placeholder={formatMessage({
-              id: getTrad('modal.placeholder.component'),
-            })}
+          <RadioGroup
+            onChange={(e) => setTmpSelectedComponent(e.target.value)}
             value={tmpSelectedComponent}
-            onChange={setTmpSelectedComponent}
           >
-            {availableComponents.map((c) => (
-              <Option key={c.index} value={c.index}>
-                {c.displayName}
-              </Option>
-            ))}
-          </Select>
+            {convertHierarhyToUIComponent(availableComponents, false)}
+          </RadioGroup>
         </Box>
       );
     return <></>;
