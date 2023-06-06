@@ -26,9 +26,9 @@ const EditViewRightLinks = () => {
 
   const currentConfig = useMemo(
     () =>
-      config.contentTypes.filter((c) =>
+      config.contentTypes.find((c) =>
         typeof c === 'string' ? c === uid : c.uid === uid,
-      )[0],
+      ),
     [config],
   );
   const allowedSourceTypes = useMemo(

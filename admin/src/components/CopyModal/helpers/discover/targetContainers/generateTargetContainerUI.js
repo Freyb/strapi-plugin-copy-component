@@ -1,8 +1,13 @@
 import React from 'react';
+import { isEmpty } from 'lodash';
+import { useIntl } from 'react-intl';
 import { Box, Radio } from '@strapi/design-system';
 import { RadioTypography } from '../../UIComponents';
+import getTrad from '../../../../../utils/getTrad';
 
 const generateTargetContainerUI = (hierarchy) => {
+  const { formatMessage } = useIntl();
+
   const recursiveConvertToUIComponent = (parentKey, rootComponent) => {
     const [entryKey, entryValue] = rootComponent;
     if (!entryValue) return;
@@ -31,6 +36,14 @@ const generateTargetContainerUI = (hierarchy) => {
       </React.Fragment>
     );
   };
+  if (isEmpty(hierarchy))
+    return (
+      <Box textAlign="center">
+        {formatMessage({
+          id: getTrad('modal.target.nocontainer'),
+        })}
+      </Box>
+    );
   return (
     <Box marginLeft="-1.2rem">
       {Object.entries(hierarchy).map((entry) =>

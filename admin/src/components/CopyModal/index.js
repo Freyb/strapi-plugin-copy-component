@@ -97,10 +97,6 @@ const CopyModal = ({
     setTmpSelectedComponent('');
   };
 
-  useEffect(() => {
-    initializeModal();
-  }, []);
-
   // Fetch source layouts at startup
   useEffect(async () => {
     const sourceLayouts = await Promise.all(
@@ -134,8 +130,8 @@ const CopyModal = ({
             ['asc'],
           ),
         );
-      } catch (error) {
-        console.error(error);
+      } catch (e) {
+        console.error(e);
         toggleNotification({
           type: 'warning',
           message: { id: 'notification.error' },

@@ -14,5 +14,8 @@
   "modal.button.next": "Next",
   "modal.button.confirm": "Confirm",
 
+  "modal.target.nocontainer": "No target container found",
+  "modal.source.nocomponent": "No source component found",
+
   "sidepanel.button.text": "Copy from other entry"
 }
