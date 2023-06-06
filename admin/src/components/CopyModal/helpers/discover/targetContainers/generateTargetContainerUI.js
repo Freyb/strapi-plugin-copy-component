@@ -19,7 +19,7 @@ const generateTargetContainerUI = (hierarchy) => {
     const label = displayName ? displayName : entryKey;
 
     return (
-      <>
+      <React.Fragment key={key}>
         <Box marginLeft="1.2rem">
           <Radio value={key} disabled={!container}>
             <RadioTypography>{label}</RadioTypography>
@@ -28,7 +28,7 @@ const generateTargetContainerUI = (hierarchy) => {
             recursiveConvertToUIComponent(key, entry),
           )}
         </Box>
-      </>
+      </React.Fragment>
     );
   };
   return (

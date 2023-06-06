@@ -20,7 +20,7 @@ const generateSourceComponentUI = (hierarchy) => {
     const label = displayName ? displayName : entryKey;
 
     return (
-      <>
+      <React.Fragment key={key}>
         <Box marginLeft="1.2rem">
           {(!_foundComponents || isArray(_foundComponents)) && (
             <>
@@ -50,7 +50,7 @@ const generateSourceComponentUI = (hierarchy) => {
             recursiveConvertToUIComponent(key, entry),
           )}
         </Box>
-      </>
+      </React.Fragment>
     );
   };
   return (
