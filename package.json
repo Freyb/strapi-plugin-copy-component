@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "This is the description of the plugin.",
   "strapi": {
-    "name": "strapi-plugin-copy-component",
+    "name": "copy-component",
     "description": "Description of Strapi Plugin Copy Component plugin",
     "kind": "plugin",
     "displayName": "Strapi Plugin Copy Component"
@@ -12,7 +12,12 @@
     "@strapi/design-system": "^1.6.3",
     "@strapi/helper-plugin": "^4.6.0",
     "@strapi/icons": "^1.6.3",
-    "prop-types": "^15.7.2"
+    "immer": "9.0.19",
+    "lodash": "4.17.21",
+    "prop-types": "^15.7.2",
+    "react-intl": "6.3.2",
+    "react-redux": "8.0.5",
+    "redux": "^4.2.1"
   },
   "devDependencies": {
     "react": "^17.0.2",
