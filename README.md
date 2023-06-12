@@ -41,7 +41,7 @@ contentTypes: [
   'api::blogpost.blogpost'
 ]
 ```
-- object: If you want to allow your admin user to copy components to an entity from entities in a different collection:
+- object: If you want to allow your admin users to copy components to an entity from entities in a different collection:
 ```js
 contentTypes: [
   {
